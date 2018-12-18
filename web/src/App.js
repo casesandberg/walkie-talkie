@@ -21,20 +21,43 @@ const bridgeReady = () => new Promise((resolve, reject) => {
     , 10)
 })
 
+const toJson = (data) => {
+    try {
+        return JSON.parse(data)
+    } catch (err) {
+        return data
+    }
+}
+
 class WebWalkieTalkie {
     constructor() {
         bridgeReady()
-            .then(() => window.postMessage('INIT', '*'))
+            .then(() => this.send('INIT'))
 
         // Using document instead of window to get this to work without any hickups.
         // https://stackoverflow.com/a/41727309/989006
-        document.addEventListener('message', (message) => {
-            console.log(message.data)
+        document.addEventListener('message', (event) => {
+            const message = toJson(event.data)
 
-            if (message.data === 'Hello from Native') {
-                window.postMessage('Right back at-cha from Web', '*')
+            this.sendLog('recieved', message)
+
+            if (message === 'Hello from Native') {
+                this.send('Right back at-cha from Web')
             }
         })
+    }
+
+    sendLog = ( message, data) => {
+        window.postMessage(JSON.stringify({
+            log: true,
+            message,
+            data,
+        }), '*')
+    }
+
+    send = (message) => {
+        this.sendLog('sending', message)
+        window.postMessage(message, '*')
     }
 }
 

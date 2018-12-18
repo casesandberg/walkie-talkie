@@ -1,16 +1,41 @@
 import React from 'react';
 import { WebView } from 'react-native';
 
+const toJson = (data) => {
+    try {
+        return JSON.parse(data)
+    } catch (err) {
+        return data
+    }
+}
+
 class NativeWalkieTalkie {
     nodeRef = null
 
     ref = (node) => this.nodeRef = node
 
     handleMessage = (event) => {
-        if (event.nativeEvent.data === 'INIT') {
-            this.nodeRef.postMessage('Hello from Native')
+        const message = toJson(event.nativeEvent.data)
+
+        if (message.log) {
+            console.log('Web: ' + message.message, message.data)
+        } else {
+            console.log('Native: recieved', message)
         }
-        console.log(event.nativeEvent.data)
+
+        if (message === 'INIT') {
+            this.send('Hello from Native')
+            return
+        }
+
+        if (message.log) {
+            return
+        }
+    }
+
+    send = (message) => {
+        console.log('Native: sending', message)
+        this.nodeRef.postMessage(message)
     }
 }
 
