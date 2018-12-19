@@ -7,7 +7,7 @@ npm i @agent/walkie-talkie
 ```
 
 ### Usage in Native
-```
+```js
 import { NativeWalkieTalkie } from '@agent/walkie-talkie'
 
 const walkieTalkie = new NativeWalkieTalkie({ logs: true })
@@ -34,7 +34,7 @@ walkieTalkie.onMessages(async (message) => {
 ```
 
 ### Usage in Web
-```
+```js
 import { WebWalkieTalkie } from '@agent/walkie-talkie'
 
 const walkieTalkie = new WebWalkieTalkie({ logs: true })
