@@ -2,6 +2,13 @@ import React, { Component } from 'react';
 import logo from './logo.svg';
 import './App.css';
 
+export const randomId = () => Math.random().toString(36).slice(-8);
+
+const dispatch = () => {}
+const actions = {
+    showNotification: () => {}
+}
+
 // Using onMessage on a RN webview overrides the original postMessage.
 // We check for that to change to know that the bridge is ready.
 // https://github.com/facebook/react-native/blob/master/React/Views/RCTWebView.m#L324
@@ -29,10 +36,24 @@ const toJson = (data) => {
     }
 }
 
+class DeferredPromise {
+  constructor() {
+    this.promise = new Promise((resolve, reject) => {
+      this.reject = reject
+      this.resolve = resolve
+    })
+  }
+}
+
 class WebWalkieTalkie {
+    ready = false
+    inflightCalls = {}
+    handleEvents = (e) => e
+    handleReady = () => {}
+
     constructor() {
         bridgeReady()
-            .then(() => this.send('INIT'))
+            .then(() => this.send({ type: 'INIT' }))
 
         // Using document instead of window to get this to work without any hickups.
         // https://stackoverflow.com/a/41727309/989006
@@ -41,13 +62,38 @@ class WebWalkieTalkie {
 
             this.sendLog('recieved', message)
 
-            if (message === 'Hello from Native') {
-                this.send('Right back at-cha from Web')
+            if (message.type === 'INIT') {
+                this.ready = true
+                this.handleReady()
+                return
             }
+
+            const solicitedCall = this.inflightCalls[message.id]
+            if (solicitedCall) {
+                clearTimeout(solicitedCall.timeout)
+                if (message.failed) {
+                    solicitedCall.deferredPromise.reject()
+                } else {
+                    solicitedCall.deferredPromise.resolve()
+                }
+                delete this.inflightCalls[message.id]
+                return
+            }
+
+            if (message.id) {
+                this.send(this.handleEvents(message), true)
+            }
+
+            // if (message === 'Hello from Native') {
+            //     this.send('Right back at-cha from Web')
+            // }
         })
     }
 
-    sendLog = ( message, data) => {
+    onMessages = (cb) => this.handleEvents = cb
+    onReady = (cb) => this.handleReady = cb
+
+    sendLog = ( message, data = {}) => {
         window.postMessage(JSON.stringify({
             log: true,
             message,
@@ -55,15 +101,75 @@ class WebWalkieTalkie {
         }), '*')
     }
 
-    send = (message) => {
-        this.sendLog('sending', message)
-        window.postMessage(message, '*')
+    send = (data, reply) => {
+        if (reply) {
+            const message = data
+            this.sendLog('sending', message)
+            window.postMessage(JSON.stringify(message), '*')
+        } else {
+            const id = randomId()
+            const deferredPromise = new DeferredPromise()
+
+            const message = {
+                ...data,
+                id,
+            }
+
+
+            this.inflightCalls[id] = {
+                deferredPromise,
+                timeout: setTimeout(() => {
+                    deferredPromise.reject('timeout')
+                }, 100000)
+            }
+
+            this.sendLog('sending', message)
+            window.postMessage(JSON.stringify(message), '*')
+
+            return deferredPromise.promise
+        }
     }
 }
 
 
 
-new WebWalkieTalkie()
+
+
+
+
+
+
+
+
+
+const walkieTalkie = new WebWalkieTalkie({ logs: true })
+
+// Do handshake to exchange version numbers
+walkieTalkie.onReady(() => {
+    walkieTalkie.send({ type: 'NATIVE/ALERT', message: 'Hello from Web' })
+        .then(() => walkieTalkie.sendLog('accepted alert'))
+        .catch(() => walkieTalkie.sendLog('rejected alert'))
+})
+
+// This will be inside a middleware so it can dispatch.
+walkieTalkie.onMessages((message) => {
+    switch (message.type) {
+        case 'NOTIFICATION':
+
+            dispatch(actions.showNotification({ message }))
+
+            return {
+                ...message,
+                testing: 123,
+            }
+        default:
+            return message
+    }
+
+})
+
+
+
 
 
 
@@ -71,12 +177,6 @@ new WebWalkieTalkie()
 
 
 class App extends Component {
-    componentDidMount = async () => {
-        console.log('web mount')
-
-
-    }
-
   render() {
     return (
       <div className="App">
