@@ -3,7 +3,7 @@ import { randomId, bridgeReady, toJson, DeferredPromise } from './utils'
 export class WalkieTalkie {
     ready = false
     inflightCalls = {}
-    handleEvents = (e) => e
+    handleEvents = () => {}
     handleReady = () => {}
 
     onMessages = (cb) => this.handleEvents = cb
@@ -14,25 +14,29 @@ export class WalkieTalkie {
         if (solicitedCall) {
             clearTimeout(solicitedCall.timeout)
             if (message.failed) {
-                solicitedCall.deferredPromise.reject()
+                solicitedCall.deferredPromise.reject(message)
             } else {
-                solicitedCall.deferredPromise.resolve()
+                solicitedCall.deferredPromise.resolve(message)
             }
             delete this.inflightCalls[message.id]
             return
         } else {
+            const partialMessage = {
+                id: message.id,
+                type: message.type,
+                recieved: true,
+            }
             try {
-                const newMessage = await this.handleEvents(message)
+                const payload = await this.handleEvents(message)
                 this.send({
-                    ...newMessage,
-                    recieved: true,
+                    ...partialMessage,
+                    payload,
                 }, true)
             } catch (error) {
                 this.send({
-                    ...message,
-                    ...error,
+                    ...partialMessage,
+                    error,
                     failed: true,
-                    recieved: true,
                 }, true)
             }
         }

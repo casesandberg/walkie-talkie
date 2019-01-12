@@ -38,12 +38,13 @@ describe('base', () => {
                 timeout: jest.fn(),
             }
         }
-        walkieTalkie.handleReceived({
+        const payload = {
             id,
             type: 'NOTIFICATION',
-        })
+        }
+        walkieTalkie.handleReceived(payload)
         expect(clearTimeout).toHaveBeenCalled()
-        expect(resolve).toHaveBeenCalled()
+        expect(resolve).toHaveBeenCalledWith(payload)
         expect(walkieTalkie.inflightCalls[id]).toBe(undefined)
     })
 
@@ -58,12 +59,13 @@ describe('base', () => {
                 timeout: jest.fn(),
             }
         }
-        walkieTalkie.handleReceived({
+        const payload = {
             id,
             type: 'NOTIFICATION',
             failed: true,
-        })
-        expect(reject).toHaveBeenCalled()
+        }
+        walkieTalkie.handleReceived(payload)
+        expect(reject).toHaveBeenCalledWith(payload)
         expect(walkieTalkie.inflightCalls[id]).toBe(undefined)
     })
 
@@ -88,7 +90,6 @@ describe('base', () => {
         walkieTalkie.onMessages((message) => {
             if (message.type === 'NOTIFICATION') {
                 return {
-                    ...message,
                     newValue: true,
                 }
             }
@@ -102,7 +103,9 @@ describe('base', () => {
         expect(walkieTalkie.send).toHaveBeenCalledWith({
             id,
             type: 'NOTIFICATION',
-            newValue: true,
+            payload: {
+                newValue: true,
+            },
             recieved: true,
         }, true)
     })
@@ -113,7 +116,7 @@ describe('base', () => {
 
         walkieTalkie.onMessages((message) => {
             if (message.type === 'NOTIFICATION') {
-                return Promise.resolve(message)
+                return Promise.resolve()
             }
         })
 
@@ -136,7 +139,7 @@ describe('base', () => {
         walkieTalkie.onMessages((message) => {
             if (message.type === 'NOTIFICATION') {
                 return Promise.reject({
-                    error: 'Too many'
+                    message: 'Too many'
                 })
             }
         })
@@ -151,7 +154,9 @@ describe('base', () => {
             type: 'NOTIFICATION',
             failed: true,
             recieved: true,
-            error: 'Too many',
+            error: {
+                message: 'Too many'
+            },
         }, true)
     })
 
