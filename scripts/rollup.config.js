@@ -7,7 +7,7 @@ export default {
   input: 'src/index.js',
   external: ['react'],
   globals: {
-    'react': 'React',
+    react: 'React',
   },
   plugins: [
     resolve(),

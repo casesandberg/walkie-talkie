@@ -1,299 +1,314 @@
 import { WalkieTalkie, WebWalkieTalkie, NativeWalkieTalkie } from '../'
-import {randomId, bridgeReady, toJson, DeferredPromise} from '../utils'
+import { randomId, bridgeReady, toJson, DeferredPromise } from '../utils'
 jest.mock('../utils')
 
-bridgeReady.mockImplementation(() => Promise.resolve());
+bridgeReady.mockImplementation(() => Promise.resolve())
 toJson.mockImplementation((data) => {
-    try {
-        return JSON.parse(data)
-    } catch (err) {
-        return data
-    }
+  try {
+    return JSON.parse(data)
+  } catch (err) {
+    return data
+  }
 })
 DeferredPromise.mockImplementation(() => ({ promise: Promise.resolve() }))
 const ID = '2c24ga'
-randomId.mockImplementation(() => ID);
+randomId.mockImplementation(() => ID)
 
-jest.useFakeTimers();
+jest.useFakeTimers()
 
 describe('base', () => {
-    let walkieTalkie
+  let walkieTalkie
 
-    beforeEach(() => {
-        walkieTalkie = new WalkieTalkie()
+  beforeEach(() => {
+    walkieTalkie = new WalkieTalkie()
+  })
+
+  test('isnt ready on start', () => {
+    expect(walkieTalkie.ready).toBe(false)
+  })
+
+  test('handles inflight calls', () => {
+    const id = '123'
+    const resolve = jest.fn()
+    walkieTalkie.inflightCalls = {
+      [id]: {
+        deferredPromise: {
+          resolve,
+        },
+        timeout: jest.fn(),
+      },
+    }
+    const payload = {
+      id,
+      type: 'NOTIFICATION',
+    }
+    walkieTalkie.handleReceived(payload)
+    expect(clearTimeout).toHaveBeenCalled()
+    expect(resolve).toHaveBeenCalledWith(payload)
+    expect(walkieTalkie.inflightCalls[id]).toBe(undefined)
+  })
+
+  test('handles failed inflight calls', () => {
+    const id = '123'
+    const reject = jest.fn()
+    walkieTalkie.inflightCalls = {
+      [id]: {
+        deferredPromise: {
+          reject,
+        },
+        timeout: jest.fn(),
+      },
+    }
+    const payload = {
+      id,
+      type: 'NOTIFICATION',
+      failed: true,
+    }
+    walkieTalkie.handleReceived(payload)
+    expect(reject).toHaveBeenCalledWith(payload)
+    expect(walkieTalkie.inflightCalls[id]).toBe(undefined)
+  })
+
+  test('handles sending calls back', async () => {
+    walkieTalkie.send = jest.fn()
+    const id = '123'
+    await walkieTalkie.handleReceived({
+      id,
+      type: 'NOTIFICATION',
     })
+    expect(walkieTalkie.send).toHaveBeenCalledWith(
+      {
+        id,
+        type: 'NOTIFICATION',
+        recieved: true,
+      },
+      true,
+    )
+  })
 
-    test('isnt ready on start', () => {
-        expect(walkieTalkie.ready).toBe(false)
-    })
+  test('handles transforming calls before sending back', async () => {
+    walkieTalkie.send = jest.fn()
+    const id = '123'
 
-    test('handles inflight calls', () => {
-        const id = '123'
-        const resolve = jest.fn()
-        walkieTalkie.inflightCalls = {
-            [id]: {
-                deferredPromise: {
-                    resolve,
-                },
-                timeout: jest.fn(),
-            }
+    walkieTalkie.onMessages((message) => {
+      if (message.type === 'NOTIFICATION') {
+        return {
+          newValue: true,
         }
-        const payload = {
-            id,
-            type: 'NOTIFICATION',
-        }
-        walkieTalkie.handleReceived(payload)
-        expect(clearTimeout).toHaveBeenCalled()
-        expect(resolve).toHaveBeenCalledWith(payload)
-        expect(walkieTalkie.inflightCalls[id]).toBe(undefined)
+      }
     })
 
-    test('handles failed inflight calls', () => {
-        const id = '123'
-        const reject = jest.fn()
-        walkieTalkie.inflightCalls = {
-            [id]: {
-                deferredPromise: {
-                    reject,
-                },
-                timeout: jest.fn(),
-            }
-        }
-        const payload = {
-            id,
-            type: 'NOTIFICATION',
-            failed: true,
-        }
-        walkieTalkie.handleReceived(payload)
-        expect(reject).toHaveBeenCalledWith(payload)
-        expect(walkieTalkie.inflightCalls[id]).toBe(undefined)
+    await walkieTalkie.handleReceived({
+      id,
+      type: 'NOTIFICATION',
     })
 
-    test('handles sending calls back', async () => {
-        walkieTalkie.send = jest.fn()
-        const id = '123'
-        await walkieTalkie.handleReceived({
-            id,
-            type: 'NOTIFICATION',
-        })
-        expect(walkieTalkie.send).toHaveBeenCalledWith({
-            id,
-            type: 'NOTIFICATION',
-            recieved: true,
-        }, true)
+    expect(walkieTalkie.send).toHaveBeenCalledWith(
+      {
+        id,
+        type: 'NOTIFICATION',
+        payload: {
+          newValue: true,
+        },
+        recieved: true,
+      },
+      true,
+    )
+  })
+
+  test('handles transforming calls that return promises before sending back', async () => {
+    walkieTalkie.send = jest.fn()
+    const id = '123'
+
+    walkieTalkie.onMessages((message) => {
+      if (message.type === 'NOTIFICATION') {
+        return Promise.resolve()
+      }
     })
 
-    test('handles transforming calls before sending back', async () => {
-        walkieTalkie.send = jest.fn()
-        const id = '123'
-
-        walkieTalkie.onMessages((message) => {
-            if (message.type === 'NOTIFICATION') {
-                return {
-                    newValue: true,
-                }
-            }
-        })
-
-        await walkieTalkie.handleReceived({
-            id,
-            type: 'NOTIFICATION',
-        })
-
-        expect(walkieTalkie.send).toHaveBeenCalledWith({
-            id,
-            type: 'NOTIFICATION',
-            payload: {
-                newValue: true,
-            },
-            recieved: true,
-        }, true)
+    await walkieTalkie.handleReceived({
+      id,
+      type: 'NOTIFICATION',
     })
 
-    test('handles transforming calls that return promises before sending back', async () => {
-        walkieTalkie.send = jest.fn()
-        const id = '123'
+    expect(walkieTalkie.send).toHaveBeenCalledWith(
+      {
+        id,
+        type: 'NOTIFICATION',
+        recieved: true,
+      },
+      true,
+    )
+  })
 
-        walkieTalkie.onMessages((message) => {
-            if (message.type === 'NOTIFICATION') {
-                return Promise.resolve()
-            }
+  test('handles transforming calls that return rejected promises before sending back', async () => {
+    walkieTalkie.send = jest.fn()
+    const id = '123'
+
+    walkieTalkie.onMessages((message) => {
+      if (message.type === 'NOTIFICATION') {
+        return Promise.reject({
+          message: 'Too many',
         })
-
-        await walkieTalkie.handleReceived({
-            id,
-            type: 'NOTIFICATION',
-        })
-
-        expect(walkieTalkie.send).toHaveBeenCalledWith({
-            id,
-            type: 'NOTIFICATION',
-            recieved: true,
-        }, true)
+      }
     })
 
-    test('handles transforming calls that return rejected promises before sending back', async () => {
-        walkieTalkie.send = jest.fn()
-        const id = '123'
-
-        walkieTalkie.onMessages((message) => {
-            if (message.type === 'NOTIFICATION') {
-                return Promise.reject({
-                    message: 'Too many'
-                })
-            }
-        })
-
-        await walkieTalkie.handleReceived({
-            id,
-            type: 'NOTIFICATION',
-        })
-
-        expect(walkieTalkie.send).toHaveBeenCalledWith({
-            id,
-            type: 'NOTIFICATION',
-            failed: true,
-            recieved: true,
-            error: {
-                message: 'Too many'
-            },
-        }, true)
+    await walkieTalkie.handleReceived({
+      id,
+      type: 'NOTIFICATION',
     })
 
-    test('Adds an id to messages', async () => {
-        const { message } = walkieTalkie.handleSendFormat({
-            type: 'NOTIFICATION',
-        })
+    expect(walkieTalkie.send).toHaveBeenCalledWith(
+      {
+        id,
+        type: 'NOTIFICATION',
+        failed: true,
+        recieved: true,
+        error: {
+          message: 'Too many',
+        },
+      },
+      true,
+    )
+  })
 
-        expect(message).toEqual({
-            type: 'NOTIFICATION',
-            id: ID,
-        })
+  test('Adds an id to messages', async () => {
+    const { message } = walkieTalkie.handleSendFormat({
+      type: 'NOTIFICATION',
     })
 
-    test('crates an inflight call when sending a post', async () => {
-        walkieTalkie.handleSendFormat({
-            type: 'NOTIFICATION',
-        })
+    expect(message).toEqual({
+      type: 'NOTIFICATION',
+      id: ID,
+    })
+  })
 
-        expect(walkieTalkie.inflightCalls).toEqual({
-            [ID]: expect.any(Object)
-        })
+  test('crates an inflight call when sending a post', async () => {
+    walkieTalkie.handleSendFormat({
+      type: 'NOTIFICATION',
     })
 
-    test('returns a promise when formatting', async () => {
-        const { promise } = walkieTalkie.handleSendFormat({
-            type: 'NOTIFICATION',
-        })
-
-        expect(promise).toEqual(expect.any(Promise))
+    expect(walkieTalkie.inflightCalls).toEqual({
+      [ID]: expect.any(Object),
     })
+  })
+
+  test('returns a promise when formatting', async () => {
+    const { promise } = walkieTalkie.handleSendFormat({
+      type: 'NOTIFICATION',
+    })
+
+    expect(promise).toEqual(expect.any(Promise))
+  })
 })
 
 describe('web', () => {
-    let walkieTalkie
+  let walkieTalkie
 
-    beforeEach(() => {
-        walkieTalkie = new WebWalkieTalkie()
+  beforeEach(() => {
+    walkieTalkie = new WebWalkieTalkie()
+  })
+
+  test('is ready when recieving INIT', () => {
+    walkieTalkie.handleReady = jest.fn()
+    walkieTalkie.handleMessage({
+      data: {
+        type: 'INIT',
+      },
+    })
+    expect(walkieTalkie.ready).toBe(true)
+    expect(walkieTalkie.handleReady).toHaveBeenCalled()
+  })
+
+  test('returns a promise when sending call', () => {
+    const promise = walkieTalkie.send({
+      type: 'NOTIFICATION',
     })
 
-    test('is ready when recieving INIT', () => {
-        walkieTalkie.handleReady = jest.fn()
-        walkieTalkie.handleMessage({
-            data: {
-                type: 'INIT',
-            }
-        })
-        expect(walkieTalkie.ready).toBe(true)
-        expect(walkieTalkie.handleReady).toHaveBeenCalled()
+    expect(promise).toEqual(expect.any(Promise))
+  })
+
+  test('sends stringified data', () => {
+    global.postMessage = jest.fn()
+
+    walkieTalkie.send({
+      type: 'NOTIFICATION',
     })
 
-    test('returns a promise when sending call', () => {
-        const promise = walkieTalkie.send({
-            type: 'NOTIFICATION',
-        })
-
-        expect(promise).toEqual(expect.any(Promise))
+    const stringified = JSON.stringify({
+      type: 'NOTIFICATION',
+      id: ID,
     })
 
-    test('sends stringified data', () => {
-        global.postMessage = jest.fn()
-
-        walkieTalkie.send({
-            type: 'NOTIFICATION',
-        })
-
-        const stringified = JSON.stringify({
-            type: 'NOTIFICATION',
-            id: ID,
-        })
-
-        expect(window.postMessage).toHaveBeenCalledWith(stringified, '*')
-    })
+    expect(window.postMessage).toHaveBeenCalledWith(stringified, '*')
+  })
 })
 
 describe('native', () => {
-    let walkieTalkie
+  let walkieTalkie
 
-    beforeEach(() => {
-        walkieTalkie = new NativeWalkieTalkie()
+  beforeEach(() => {
+    walkieTalkie = new NativeWalkieTalkie()
+  })
+
+  test('is ready when recieving INIT', async () => {
+    walkieTalkie.send = jest.fn()
+    walkieTalkie.handleReady = jest.fn()
+    await walkieTalkie.handleMessage({
+      nativeEvent: {
+        data: {
+          type: 'INIT',
+        },
+      },
+    })
+    expect(walkieTalkie.ready).toBe(true)
+    expect(walkieTalkie.handleReady).toHaveBeenCalled()
+  })
+
+  test('sends back event when recieving INIT', async () => {
+    walkieTalkie.send = jest.fn()
+    await walkieTalkie.handleMessage({
+      nativeEvent: {
+        data: {
+          type: 'INIT',
+        },
+      },
+    })
+    expect(walkieTalkie.send).toHaveBeenCalledWith(
+      {
+        type: 'INIT',
+      },
+      true,
+    )
+  })
+
+  test('returns a promise when sending call', () => {
+    const postMessage = jest.fn()
+    walkieTalkie.nodeRef = {
+      postMessage,
+    }
+    const promise = walkieTalkie.send({
+      type: 'NOTIFICATION',
     })
 
-    test('is ready when recieving INIT', async () => {
-        walkieTalkie.send = jest.fn()
-        walkieTalkie.handleReady = jest.fn()
-        await walkieTalkie.handleMessage({
-            nativeEvent: {
-                data: {
-                    type: 'INIT',
-                }
-            }
-        })
-        expect(walkieTalkie.ready).toBe(true)
-        expect(walkieTalkie.handleReady).toHaveBeenCalled()
+    expect(promise).toEqual(expect.any(Promise))
+  })
+
+  test('sends stringified data', () => {
+    const postMessage = jest.fn()
+    walkieTalkie.nodeRef = {
+      postMessage,
+    }
+
+    walkieTalkie.send({
+      type: 'NOTIFICATION',
     })
 
-    test('sends back event when recieving INIT', async () => {
-        walkieTalkie.send = jest.fn()
-        await walkieTalkie.handleMessage({
-            nativeEvent: {
-                data: {
-                    type: 'INIT',
-                }
-            }
-        })
-        expect(walkieTalkie.send).toHaveBeenCalledWith({
-            type: 'INIT'
-        }, true)
+    const stringified = JSON.stringify({
+      type: 'NOTIFICATION',
+      id: ID,
     })
 
-    test('returns a promise when sending call', () => {
-        const postMessage = jest.fn()
-        walkieTalkie.nodeRef = {
-            postMessage,
-        }
-        const promise = walkieTalkie.send({
-            type: 'NOTIFICATION',
-        })
-
-        expect(promise).toEqual(expect.any(Promise))
-    })
-
-    test('sends stringified data', () => {
-        const postMessage = jest.fn()
-        walkieTalkie.nodeRef = {
-            postMessage,
-        }
-
-        walkieTalkie.send({
-            type: 'NOTIFICATION',
-        })
-
-        const stringified = JSON.stringify({
-            type: 'NOTIFICATION',
-            id: ID,
-        })
-
-        expect(postMessage).toHaveBeenCalledWith(stringified)
-    })
+    expect(postMessage).toHaveBeenCalledWith(stringified)
+  })
 })
