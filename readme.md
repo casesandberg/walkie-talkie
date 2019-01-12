@@ -27,7 +27,7 @@ walkieTalkie.onMessages(async (message) => {
             })
         }
         default:
-            return message
+            return {}
     }
 
 })
@@ -53,11 +53,10 @@ walkieTalkie.onMessages((message) => {
             dispatch(actions.showNotification({ message }))
 
             return {
-                ...message,
                 testing: 123,
             }
         default:
-            return message
+            return {}
     }
 
 })
