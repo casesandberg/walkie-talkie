@@ -1,6 +1,6 @@
 {
   "version": "0.5.0",
-  "name": "@agent/walkie-talkie",
+  "name": "walkie-talkie",
   "main": "lib/index.js",
   "author": "case <case@casesandberg.com>",
   "license": "MIT",
