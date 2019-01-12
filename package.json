@@ -1,11 +1,12 @@
 {
   "version": "0.1.0",
   "name": "@agent/walkie-talkie",
-  "main": "src/index.js",
+  "main": "lib/index.js",
   "author": "case <case@casesandberg.com>",
   "license": "MIT",
   "scripts": {
     "bundle": "rollup -c scripts/rollup.config.js",
+    "build": "rm -rf lib && babel src -d lib",
     "flow": "flow",
     "lint": "eslint 'packages/**/*.js'",
     "lint-fix": "npm run lint -s -- --fix",
